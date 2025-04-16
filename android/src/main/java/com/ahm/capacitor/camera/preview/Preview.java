@@ -78,6 +78,11 @@ class Preview extends RelativeLayout implements SurfaceHolder.Callback, TextureV
             } else if (mFocusModes.contains("auto")) {
                 params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
             }
+
+            params.setAutoExposureLock(false);
+            params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_AUTO);
+            params.setExposureCompensation(0);
+
             mCamera.setParameters(params);
         }
     }

@@ -2,6 +2,7 @@ package com.ahm.capacitor.camera.preview;
 
 import android.app.Activity;
 import android.app.Fragment;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -19,6 +20,7 @@ import android.hardware.Camera.ShutterCallback;
 import android.media.AudioManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
 import android.util.DisplayMetrics;
@@ -798,8 +800,21 @@ public class CameraActivity extends Fragment {
                         params.setRotation(mPreview.getDisplayOrientation());
                     }
 
+                    AudioManager audioManager = (AudioManager) getActivity().getSystemService(Context.AUDIO_SERVICE);
+                    NotificationManager notificationManager = (NotificationManager) getActivity().getSystemService(Context.NOTIFICATION_SERVICE);
+
+                    boolean isSilent = audioManager.getRingerMode() == AudioManager.RINGER_MODE_SILENT ||
+                            audioManager.getStreamVolume(AudioManager.STREAM_RING) == 0 ||
+                            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                                    notificationManager.getCurrentInterruptionFilter() == NotificationManager.INTERRUPTION_FILTER_NONE);
+
+                    // Disable the shutter sound if silent mode is on (API level 17+)
+                    if (isSilent && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                        mCamera.enableShutterSound(false);
+                    }
+
                     mCamera.setParameters(params);
-                    mCamera.takePicture(shutterCallback, null, jpegPictureCallback);
+                    mCamera.takePicture(isSilent ? null : shutterCallback, null, jpegPictureCallback);
                 }
             }
                 .start();
