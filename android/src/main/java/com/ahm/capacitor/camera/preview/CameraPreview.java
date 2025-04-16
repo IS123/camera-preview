@@ -352,33 +352,46 @@ public class CameraPreview extends Plugin implements CameraActivity.CameraPrevie
 
                         fragment.setRect(computedX, computedY, computedWidth, computedHeight);
 
-                        FrameLayout containerView = getBridge().getActivity().findViewById(containerViewId);
-                        if (containerView == null) {
-                            containerView = new FrameLayout(getActivity().getApplicationContext());
-                            containerView.setId(containerViewId);
+                        View containerViewRaw = getBridge().getActivity().findViewById(containerViewId);
 
-                            getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
-                            ((ViewGroup) getBridge().getWebView().getParent()).addView(containerView);
-                            if (toBack == true) {
-                                getBridge().getWebView().getParent().bringChildToFront(getBridge().getWebView());
-                                setupBroadcast();
+                        try {
+                            FrameLayout containerView = (FrameLayout) containerViewRaw;
+                            if (containerView == null) {
+                                containerView = new FrameLayout(getActivity().getApplicationContext());
+                                containerView.setId(containerViewId);
+
+                                getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
+                                ((ViewGroup) getBridge().getWebView().getParent()).addView(containerView);
+                                if (toBack == true) {
+                                    getBridge().getWebView().getParent().bringChildToFront(getBridge().getWebView());
+                                    setupBroadcast();
+                                }
+
+                                FragmentManager fragmentManager = getBridge().getActivity().getFragmentManager();
+                                FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+                                fragmentTransaction.add(containerView.getId(), fragment);
+                                fragmentTransaction.commit();
+
+                                // NOTE: we don't return invoke call.resolve here because it must be invoked in onCameraStarted
+                                // otherwise the plugin start method might resolve/return before the camera is actually set in CameraActivity
+                                // onResume method (see this line mCamera = Camera.open(defaultCameraId);) and the next subsequent plugin
+                                // method invocations (for example, getSupportedFlashModes) might fails with "Camera is not running" error
+                                // because camera is not available yet and hasCamera method will return false
+                                // Please also see https://developer.android.com/reference/android/hardware/Camera.html#open%28int%29
+                                bridge.saveCall(call);
+                                cameraStartCallbackId = call.getCallbackId();
+                            } else {
+                                call.reject("camera already started");
                             }
-
-                            FragmentManager fragmentManager = getBridge().getActivity().getFragmentManager();
-                            FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
-                            fragmentTransaction.add(containerView.getId(), fragment);
-                            fragmentTransaction.commit();
-
-                            // NOTE: we don't return invoke call.resolve here because it must be invoked in onCameraStarted
-                            // otherwise the plugin start method might resolve/return before the camera is actually set in CameraActivity
-                            // onResume method (see this line mCamera = Camera.open(defaultCameraId);) and the next subsequent plugin
-                            // method invocations (for example, getSupportedFlashModes) might fails with "Camera is not running" error
-                            // because camera is not available yet and hasCamera method will return false
-                            // Please also see https://developer.android.com/reference/android/hardware/Camera.html#open%28int%29
-                            bridge.saveCall(call);
-                            cameraStartCallbackId = call.getCallbackId();
-                        } else {
-                            call.reject("camera already started");
+                        } catch (Exception e) {
+                            View view = getBridge().getActivity().findViewById(containerViewId);
+                            if (view != null) {
+                                ViewGroup parent = (ViewGroup) view.getParent();
+                                if (parent != null) {
+                                    parent.removeView(view);
+                                }
+                            }
+                            call.reject("Camera initialization failed");
                         }
                     }
                 }
