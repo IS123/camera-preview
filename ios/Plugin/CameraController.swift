@@ -40,117 +40,148 @@ class CameraController: NSObject {
 
 extension CameraController {
     func prepare(cameraPosition: String, disableAudio: Bool, completionHandler: @escaping (Error?) -> Void) {
+    let prepareQueue = DispatchQueue(label: "camera.prepare.queue")
+
+    prepareQueue.async { [weak self] in
+        guard let self = self else { return }
+
         func createCaptureSession() {
             self.captureSession = AVCaptureSession()
         }
 
         func configureCaptureDevices() throws {
+            let session = AVCaptureDevice.DiscoverySession(
+                deviceTypes: [.builtInWideAngleCamera],
+                mediaType: .video,
+                position: .unspecified
+            )
 
-            let session = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: AVMediaType.video, position: .unspecified)
-
-            let cameras = session.devices.compactMap { $0 }
-            guard !cameras.isEmpty else { throw CameraControllerError.noCamerasAvailable }
+            let cameras = session.devices
+            guard !cameras.isEmpty else {
+                throw CameraControllerError.noCamerasAvailable
+            }
 
             for camera in cameras {
-                if camera.position == .front {
+                switch camera.position {
+                case .front:
                     self.frontCamera = camera
-                }
-
-                if camera.position == .back {
+                case .back:
                     self.rearCamera = camera
-
                     try camera.lockForConfiguration()
                     camera.focusMode = .continuousAutoFocus
                     camera.unlockForConfiguration()
+                default:
+                    break
                 }
             }
-            if disableAudio == false {
-                self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
+
+            if !disableAudio {
+                self.audioDevice = AVCaptureDevice.default(for: .audio)
             }
         }
 
         func configureDeviceInputs() throws {
-            guard let captureSession = self.captureSession else { throw CameraControllerError.captureSessionIsMissing }
+            guard let captureSession = self.captureSession else {
+                throw CameraControllerError.captureSessionIsMissing
+            }
 
-            if cameraPosition == "rear" {
-                if let rearCamera = self.rearCamera {
-                    self.rearCameraInput = try AVCaptureDeviceInput(device: rearCamera)
-
-                    if captureSession.canAddInput(self.rearCameraInput!) { captureSession.addInput(self.rearCameraInput!) }
-
+            if cameraPosition == "rear", let rearCamera = self.rearCamera {
+                let rearInput = try AVCaptureDeviceInput(device: rearCamera)
+                if captureSession.canAddInput(rearInput) {
+                    captureSession.addInput(rearInput)
+                    self.rearCameraInput = rearInput
                     self.currentCameraPosition = .rear
                 }
-            } else if cameraPosition == "front" {
-                if let frontCamera = self.frontCamera {
-                    self.frontCameraInput = try AVCaptureDeviceInput(device: frontCamera)
-
-                    if captureSession.canAddInput(self.frontCameraInput!) { captureSession.addInput(self.frontCameraInput!) } else { throw CameraControllerError.inputsAreInvalid }
-
+            } else if cameraPosition == "front", let frontCamera = self.frontCamera {
+                let frontInput = try AVCaptureDeviceInput(device: frontCamera)
+                if captureSession.canAddInput(frontInput) {
+                    captureSession.addInput(frontInput)
+                    self.frontCameraInput = frontInput
                     self.currentCameraPosition = .front
+                } else {
+                    throw CameraControllerError.inputsAreInvalid
                 }
-            } else { throw CameraControllerError.noCamerasAvailable }
+            } else {
+                throw CameraControllerError.noCamerasAvailable
+            }
 
-            // Add audio input
-            if disableAudio == false {
-                if let audioDevice = self.audioDevice {
-                    self.audioInput = try AVCaptureDeviceInput(device: audioDevice)
-                    if captureSession.canAddInput(self.audioInput!) {
-                        captureSession.addInput(self.audioInput!)
-                    } else {
-                        throw CameraControllerError.inputsAreInvalid
-                    }
+            if !disableAudio, let audioDevice = self.audioDevice {
+                let audioInput = try AVCaptureDeviceInput(device: audioDevice)
+                if captureSession.canAddInput(audioInput) {
+                    captureSession.addInput(audioInput)
+                    self.audioInput = audioInput
+                } else {
+                    throw CameraControllerError.inputsAreInvalid
                 }
             }
         }
 
         func configurePhotoOutput() throws {
-            guard let captureSession = self.captureSession else { throw CameraControllerError.captureSessionIsMissing }
+            guard let captureSession = self.captureSession else {
+                throw CameraControllerError.captureSessionIsMissing
+            }
 
-            self.photoOutput = AVCapturePhotoOutput()
-            self.photoOutput!.setPreparedPhotoSettingsArray([AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])], completionHandler: nil)
-            self.photoOutput?.isHighResolutionCaptureEnabled = self.highResolutionOutput
-            if captureSession.canAddOutput(self.photoOutput!) { captureSession.addOutput(self.photoOutput!) }
-            captureSession.startRunning()
+            let output = AVCapturePhotoOutput()
+
+            if output.isPreparedPhotoSettingsArraySupported {
+                output.setPreparedPhotoSettingsArray(
+                    [AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])],
+                    completionHandler: nil
+                )
+            }
+
+            output.isHighResolutionCaptureEnabled = self.highResolutionOutput
+
+            if captureSession.canAddOutput(output) {
+                captureSession.addOutput(output)
+                self.photoOutput = output
+            }
+
+            if !captureSession.isRunning {
+                captureSession.startRunning()
+            }
         }
 
         func configureDataOutput() throws {
-            guard let captureSession = self.captureSession else { throw CameraControllerError.captureSessionIsMissing }
+            guard let captureSession = self.captureSession else {
+                throw CameraControllerError.captureSessionIsMissing
+            }
 
-            self.dataOutput = AVCaptureVideoDataOutput()
-            self.dataOutput?.videoSettings = [
-                (kCVPixelBufferPixelFormatTypeKey as String): NSNumber(value: kCVPixelFormatType_32BGRA as UInt32)
+            let output = AVCaptureVideoDataOutput()
+            output.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: NSNumber(value: kCVPixelFormatType_32BGRA)
             ]
-            self.dataOutput?.alwaysDiscardsLateVideoFrames = true
-            if captureSession.canAddOutput(self.dataOutput!) {
-                captureSession.addOutput(self.dataOutput!)
+            output.alwaysDiscardsLateVideoFrames = true
+
+            if captureSession.canAddOutput(output) {
+                captureSession.addOutput(output)
+                self.dataOutput = output
             }
 
             captureSession.commitConfiguration()
 
-            let queue = DispatchQueue(label: "DataOutput", attributes: [])
-            self.dataOutput?.setSampleBufferDelegate(self, queue: queue)
+            let dataQueue = DispatchQueue(label: "camera.data.queue")
+            output.setSampleBufferDelegate(self, queue: dataQueue)
         }
 
-        DispatchQueue(label: "prepare").async {
-            do {
-                createCaptureSession()
-                try configureCaptureDevices()
-                try configureDeviceInputs()
-                try configurePhotoOutput()
-                try configureDataOutput()
-                // try configureVideoOutput()
-            } catch {
-                DispatchQueue.main.async {
-                    completionHandler(error)
-                }
-
-                return
-            }
-
+        // Main execution flow
+        do {
+            createCaptureSession()
+            try configureCaptureDevices()
+            try configureDeviceInputs()
+            try configurePhotoOutput()
+            try configureDataOutput()
+        } catch {
             DispatchQueue.main.async {
-                completionHandler(nil)
+                completionHandler(error)
             }
+            return
         }
+
+        DispatchQueue.main.async {
+            completionHandler(nil)
+        }
+    }
     }
 
     func displayPreview(on view: UIView) throws {
