@@ -63,35 +63,44 @@ class Preview extends RelativeLayout implements SurfaceHolder.Callback, TextureV
 
     public void setCamera(Camera camera, int cameraId) {
         try {
-            Camera.Parameters params = mCamera.getParameters();
+            if (camera != null) {
+                mCamera = camera;
 
-            mSupportedPreviewSizes = params.getSupportedPreviewSizes();
-            List<String> mFocusModes = params.getSupportedFocusModes();
+                this.cameraId = cameraId;
 
-            if (mFocusModes != null) {
-                if (mFocusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
-                    params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-                } else if (mFocusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
-                    params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
-                } else if (mFocusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
+                mSupportedPreviewSizes = mCamera.getParameters().getSupportedPreviewSizes();
+
+                setCameraDisplayOrientation();
+
+                List<String> mFocusModes = mCamera.getParameters().getSupportedFocusModes();
+
+                Camera.Parameters params = mCamera.getParameters();
+
+                if (mFocusModes != null) {
+                    if (mFocusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)) {
+                        params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+                    } else if (mFocusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)) {
+                        params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+                    } else if (mFocusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
                     params.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+                    }
                 }
-            }
 
-            if (params.isAutoExposureLockSupported()) {
-                params.setAutoExposureLock(false);
-            }
+                if (params.isAutoExposureLockSupported()) {
+                    params.setAutoExposureLock(false);
+                }
 
-            if (params.getSupportedWhiteBalance() != null &&
-                params.getSupportedWhiteBalance().contains(Camera.Parameters.WHITE_BALANCE_AUTO)) {
-                params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_AUTO);
-            }
+                if (params.getSupportedWhiteBalance() != null &&
+                    params.getSupportedWhiteBalance().contains(Camera.Parameters.WHITE_BALANCE_AUTO)) {
+                    params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_AUTO);
+                }
 
-            if (params.getMinExposureCompensation() <= 0 && params.getMaxExposureCompensation() >= 0) {
-                params.setExposureCompensation(0);
-            }
+                if (params.getMinExposureCompensation() <= 0 && params.getMaxExposureCompensation() >= 0) {
+                    params.setExposureCompensation(0);
+                }
 
-            mCamera.setParameters(params);
+                mCamera.setParameters(params);
+            }
         } catch (Exception e) {
             Log.e(TAG, "Error setting camera parameters", e);
         }
