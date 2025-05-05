@@ -123,12 +123,10 @@ extension CameraController {
 
             let output = AVCapturePhotoOutput()
 
-            if output.isPreparedPhotoSettingsArraySupported {
-                output.setPreparedPhotoSettingsArray(
-                    [AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])],
-                    completionHandler: nil
-                )
-            }
+            output.setPreparedPhotoSettingsArray(
+                [AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])],
+                completionHandler: nil
+            )
 
             output.isHighResolutionCaptureEnabled = self.highResolutionOutput
 
@@ -137,7 +135,7 @@ extension CameraController {
                 self.photoOutput = output
             }
 
-            if !captureSession.isRunning {
+             if !captureSession.isRunning {
                 captureSession.startRunning()
             }
         }
